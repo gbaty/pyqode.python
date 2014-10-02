@@ -323,29 +323,6 @@ class JediCompletionProvider:
     """
 
     @staticmethod
-    def _hack_for_pyqode_qt_shim(code, column, line):
-        """
-        This is a hack to force jedi to provide completions on the
-        pyqode.qt namespace.
-
-        Basically we replace ``pyqode.qt`` by ``PyQt5`` because pyqode.qt follow
-        the qt5 layout (with QtWidgets).
-
-        .. warning:: This means the PyQt5 must be installed for the python
-            interpreter used by the backend!!!
-        """
-        qt = 'PyQt5'
-        try:
-            current = code.splitlines()[line]
-        except IndexError:
-            pass
-        else:
-            if 'pyqode.qt' in current:
-                column -= (len('pyqode.qt') - len(qt))
-            code = code.replace('pyqode.qt', qt)
-        return code, column
-
-    @staticmethod
     def complete(code, line, column, path, encoding, prefix):
         """
         Completes python code using `jedi`_.
@@ -354,13 +331,6 @@ class JediCompletionProvider:
         """
         ret_val = []
         try:
-            try:
-                os.environ['PYQODE_DEV']
-            except KeyError:
-                pass
-            else:
-                code, column = JediCompletionProvider._hack_for_pyqode_qt_shim(
-                    code, column, line)
             script = jedi.Script(code, line + 1, column, path, encoding)
             completions = script.completions()
         except jedi.NotFoundError:
@@ -372,3 +342,12 @@ class JediCompletionProvider:
                     completion.name, completion.type),
                 'tooltip': completion.description})
         return ret_val
+
+
+if 'PYQODE_DEV' in os.environ:
+    # We need to pre-load a specific Qt API to get qt completions on pyqode
+    # wigdets and on pyqode.qt. We choose to use PyQt4 because it is widely
+    # available. So to develop pyqode with pyqode, you need PyQt4 and set
+    # the PYQODE_DEV environment API.
+    jedi.preload_module(*[
+        'PyQt4.QtGui', 'PyQt4.QtCore', 'PyQt4.QtNetWork', 'PyQt4.QtTest'])
